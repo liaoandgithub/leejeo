@@ -1,0 +1,5 @@
+# Optional Cloudflare Pages / Workers related config placeholder
+# This file is not strictly required for Pages static deployment,
+# but reserved for future extension.
+name = "leejeo-blog"
+compatibility_date = "2026-04-05"
