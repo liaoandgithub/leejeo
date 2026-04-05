@@ -1,0 +1,9 @@
+.navbar .navbar-brand img,
+.navbar .navbar-brand i,
+.navbar .navbar-brand .iconfont {
+  display: none !important;
+}
+
+.navbar .navbar-brand {
+  gap: 0 !important;
+}
