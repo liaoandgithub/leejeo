@@ -1,6 +1,9 @@
 # Fluid theme custom config
 # Docs: https://hexo.fluid-dev.com/docs/
 
+favicon: /img/avatar.png
+apple_touch_icon: /img/avatar.png
+
 navbar:
   blog_title: "Leejeo的小窝"
 
