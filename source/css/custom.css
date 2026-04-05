@@ -1,9 +1,21 @@
 .navbar .navbar-brand img,
 .navbar .navbar-brand i,
-.navbar .navbar-brand .iconfont {
+.navbar .navbar-brand svg,
+.navbar .navbar-brand .iconfont,
+.navbar .navbar-brand::before,
+.navbar .navbar-brand::after,
+.navbar-brand img,
+.navbar-brand i,
+.navbar-brand svg,
+.navbar-brand .iconfont,
+.navbar-brand::before,
+.navbar-brand::after {
   display: none !important;
+  content: none !important;
 }
 
-.navbar .navbar-brand {
+.navbar .navbar-brand,
+.navbar-brand {
   gap: 0 !important;
+  background-image: none !important;
 }
