@@ -11,7 +11,7 @@ index:
   banner_img: /img/default.png
   slogan:
     enable: true
-    text: "一个小窝。"
+    text: "一个小窝"
 
 about:
   enable: true
