@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://leejeo.pages.dev/sitemap.xml
+Sitemap: https://liaoandgithub.github.io/leejeo/sitemap.xml
