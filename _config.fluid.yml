@@ -1,0 +1,42 @@
+# Fluid theme custom config
+# Docs: https://hexo.fluid-dev.com/docs/
+
+navbar:
+  blog_title: "Leejeo的博客"
+
+index:
+  banner_img: /img/default.png
+  slogan:
+    enable: true
+    text: "记录想法、日常与一点点灵感。"
+
+about:
+  enable: true
+  banner_img: /img/default.png
+  avatar: /img/avatar.png
+  name: "Leejeo"
+  intro: "这里放一些日常、随笔和我想留下的东西。"
+  icons:
+    - { class: "iconfont icon-github-fill", link: "https://github.com/", tip: "GitHub" }
+
+post:
+  meta:
+    author:
+      enable: true
+
+footer:
+  content: '
+    <span>Powered by Hexo & Fluid</span>
+  '
+
+fun_features:
+  typing:
+    enable: true
+    loop: false
+
+search:
+  enable: true
+  path: /local-search.xml
+  generate_path: /local-search.xml
+  field: post
+  content: true
