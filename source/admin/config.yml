@@ -1,0 +1,36 @@
+backend:
+  name: github
+  repo: liaoandgithub/leejeo
+  branch: master
+  # publish_mode 可选 simple / editorial_workflow
+publish_mode: simple
+
+media_folder: source/images/uploads
+public_folder: /images/uploads
+
+site_url: https://liaoandgithub.github.io/leejeo
+logo_url: https://liaoandgithub.github.io/leejeo/img/avatar.png
+
+collections:
+  - name: posts
+    label: 文章
+    folder: source/_posts
+    create: true
+    slug: '{{year}}-{{month}}-{{day}}-{{slug}}'
+    fields:
+      - { label: 标题, name: title, widget: string }
+      - { label: 发布时间, name: date, widget: datetime, format: 'YYYY-MM-DD HH:mm:ss' }
+      - { label: 标签, name: tags, widget: list, required: false }
+      - { label: 分类, name: categories, widget: list, required: false }
+      - { label: 正文, name: body, widget: markdown }
+
+  - name: pages
+    label: 页面
+    files:
+      - label: 关于页
+        name: about
+        file: source/about/index.md
+        fields:
+          - { label: 标题, name: title, widget: string }
+          - { label: 布局, name: layout, widget: hidden, default: about }
+          - { label: 正文, name: body, widget: markdown }
