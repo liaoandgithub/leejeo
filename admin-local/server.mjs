@@ -2,6 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { exec, spawn } from 'node:child_process';
+import crypto from 'node:crypto';
 
 const PORT = 4310;
 const ADMIN_ROOT = 'E:/blog/admin-local';
@@ -12,24 +13,74 @@ const ABOUT_FILE = path.join(BLOG_ROOT, 'source', 'about', 'index.md');
 const CONFIG_FILE = path.join(BLOG_ROOT, '_config.yml');
 const FLUID_CONFIG_FILE = path.join(BLOG_ROOT, '_config.fluid.yml');
 const UPLOAD_DIR = path.join(BLOG_ROOT, 'source', 'images', 'uploads');
+const ADMIN_PASSWORD = 'Liao2010';
+const sessions = new Set();
+const HEARTBEAT_TIMEOUT_MS = 2 * 60 * 1000;
+let lastHeartbeatAt = Date.now();
 
 function send(res, code, data, type = 'application/json; charset=utf-8') {
   res.writeHead(code, { 'Content-Type': type });
   res.end(type.startsWith('application/json') ? JSON.stringify(data) : data);
 }
-function readBody(req) { return new Promise(resolve => { let buf = ''; req.on('data', c => (buf += c)); req.on('end', () => resolve(buf)); }); }
-function slugify(s = 'post') { return s.toLowerCase().trim().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-').replace(/^-+|-+$/g, '') || 'post'; }
-function nowStr() { const d = new Date(); const pad = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
-function run(cmd, cwd = BLOG_ROOT) { return new Promise(resolve => { exec(cmd, { cwd, shell: true }, (error, stdout, stderr) => { resolve({ ok: !error, output: [stdout, stderr, error ? String(error) : ''].filter(Boolean).join('\n') }); }); }); }
+function readBody(req) {
+  return new Promise(resolve => {
+    let buf = '';
+    req.on('data', c => (buf += c));
+    req.on('end', () => resolve(buf));
+  });
+}
+function parseCookies(req) {
+  const raw = req.headers.cookie || '';
+  const out = {};
+  raw.split(';').forEach(p => {
+    const i = p.indexOf('=');
+    if (i > -1) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+  });
+  return out;
+}
+function isAuthed(req) {
+  const cookies = parseCookies(req);
+  return !!(cookies.admin_session && sessions.has(cookies.admin_session));
+}
+function requireAuth(req, res) {
+  if (!isAuthed(req)) {
+    send(res, 401, { message: '未登录' });
+    return false;
+  }
+  return true;
+}
+function slugify(s = 'post') {
+  return s.toLowerCase().trim().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-').replace(/^-+|-+$/g, '') || 'post';
+}
+function nowStr() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function run(cmd, cwd = BLOG_ROOT) {
+  return new Promise(resolve => {
+    exec(cmd, { cwd, shell: true }, (error, stdout, stderr) => {
+      resolve({ ok: !error, output: [stdout, stderr, error ? String(error) : ''].filter(Boolean).join('\n') });
+    });
+  });
+}
 function parseFrontmatter(content = '') {
   const m = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!m) return { attrs: {}, body: content };
   const raw = m[1], body = m[2], attrs = {};
   let currentKey = '';
   for (const line of raw.split(/\r?\n/)) {
-    if (/^\s+-\s+/.test(line) && currentKey) { attrs[currentKey] = attrs[currentKey] || []; attrs[currentKey].push(line.replace(/^\s+-\s+/, '')); continue; }
-    const idx = line.indexOf(':'); if (idx < 0) continue;
-    const k = line.slice(0, idx).trim(); const v = line.slice(idx + 1).trim(); currentKey = k; attrs[k] = v;
+    if (/^\s+-\s+/.test(line) && currentKey) {
+      attrs[currentKey] = attrs[currentKey] || [];
+      attrs[currentKey].push(line.replace(/^\s+-\s+/, ''));
+      continue;
+    }
+    const idx = line.indexOf(':');
+    if (idx < 0) continue;
+    const k = line.slice(0, idx).trim();
+    const v = line.slice(idx + 1).trim();
+    currentKey = k;
+    attrs[k] = v;
   }
   return { attrs, body };
 }
@@ -39,13 +90,19 @@ function buildPostContent({ title, date, tags, categories, body }) {
   return `---\ntitle: ${title}\ndate: ${date || nowStr()}\n${t.length ? `tags:\n${t.map(x => `  - ${x}`).join('\n')}\n` : ''}${c.length ? `categories:\n${c.map(x => `  - ${x}`).join('\n')}\n` : ''}---\n\n${body || ''}\n`;
 }
 function parseMultipart(req, raw) {
-  const type = req.headers['content-type'] || ''; const match = type.match(/boundary=(.*)$/); if (!match) return null;
-  const boundary = '--' + match[1]; const parts = raw.split(boundary).filter(p => p.includes('Content-Disposition'));
+  const type = req.headers['content-type'] || '';
+  const match = type.match(/boundary=(.*)$/);
+  if (!match) return null;
+  const boundary = '--' + match[1];
+  const parts = raw.split(boundary).filter(p => p.includes('Content-Disposition'));
   for (const p of parts) {
-    const nameMatch = p.match(/name="([^"]+)"/); const fileMatch = p.match(/filename="([^"]*)"/);
+    const nameMatch = p.match(/name="([^"]+)"/);
+    const fileMatch = p.match(/filename="([^"]*)"/);
     if (nameMatch?.[1] === 'image' && fileMatch) {
-      const start = p.indexOf('\r\n\r\n'); if (start < 0) continue;
-      let content = p.slice(start + 4); content = content.replace(/\r\n--$/, '').replace(/\r\n$/, '');
+      const start = p.indexOf('\r\n\r\n');
+      if (start < 0) continue;
+      let content = p.slice(start + 4);
+      content = content.replace(/\r\n--$/, '').replace(/\r\n$/, '');
       return { filename: fileMatch[1], content };
     }
   }
@@ -53,10 +110,11 @@ function parseMultipart(req, raw) {
 }
 function readSiteConfig() {
   const s = fs.readFileSync(CONFIG_FILE, 'utf8');
-  const title = (s.match(/^title:\s*(.*)$/m) || [])[1] || '';
-  const subtitle = (s.match(/^subtitle:\s*'(.*)'$/m) || s.match(/^subtitle:\s*(.*)$/m) || [])[1] || '';
-  const description = (s.match(/^description:\s*'(.*)'$/m) || s.match(/^description:\s*(.*)$/m) || [])[1] || '';
-  return { title, subtitle, description };
+  return {
+    title: (s.match(/^title:\s*(.*)$/m) || [])[1] || '',
+    subtitle: (s.match(/^subtitle:\s*'(.*)'$/m) || s.match(/^subtitle:\s*(.*)$/m) || [])[1] || '',
+    description: (s.match(/^description:\s*'(.*)'$/m) || s.match(/^description:\s*(.*)$/m) || [])[1] || ''
+  };
 }
 function writeSiteConfig({ title = '', subtitle = '', description = '' }) {
   let s = fs.readFileSync(CONFIG_FILE, 'utf8');
@@ -67,12 +125,13 @@ function writeSiteConfig({ title = '', subtitle = '', description = '' }) {
 }
 function readFluidHomeInfo() {
   const s = fs.readFileSync(FLUID_CONFIG_FILE, 'utf8');
-  const blogTitle = (s.match(/blog_title:\s*"([^"]*)"/) || [])[1] || '';
-  const slogan = (s.match(/text:\s*"([^"]*)"/) || [])[1] || '';
-  const aboutName = (s.match(/name:\s*"([^"]*)"/) || [])[1] || '';
-  const aboutIntro = (s.match(/intro:\s*"([^"]*)"/) || [])[1] || '';
-  const bannerImg = (s.match(/banner_img:\s*(.*)$/m) || [])[1] || '';
-  return { blog_title: blogTitle, slogan, about_name: aboutName, about_intro: aboutIntro, banner_img: bannerImg.trim() };
+  return {
+    blog_title: (s.match(/blog_title:\s*"([^"]*)"/) || [])[1] || '',
+    slogan: (s.match(/text:\s*"([^"]*)"/) || [])[1] || '',
+    about_name: (s.match(/name:\s*"([^"]*)"/) || [])[1] || '',
+    about_intro: (s.match(/intro:\s*"([^"]*)"/) || [])[1] || '',
+    banner_img: ((s.match(/banner_img:\s*(.*)$/m) || [])[1] || '').trim()
+  };
 }
 function writeFluidHomeInfo({ blog_title = '', slogan = '', about_name = '', about_intro = '', banner_img = '' }) {
   let s = fs.readFileSync(FLUID_CONFIG_FILE, 'utf8');
@@ -86,7 +145,9 @@ function writeFluidHomeInfo({ blog_title = '', slogan = '', about_name = '', abo
 function ensureHexoServer() {
   return new Promise(resolve => {
     exec('netstat -ano | findstr :4000', { shell: true }, (error, stdout) => {
-      if (!error && stdout && stdout.trim()) return resolve({ ok: true, output: 'Hexo 预览服务已在 4000 端口运行。' });
+      if (!error && stdout && stdout.trim()) {
+        return resolve({ ok: true, output: 'Hexo 预览服务已在 4000 端口运行。' });
+      }
       const child = spawn('npx', ['hexo', 'server'], { cwd: BLOG_ROOT, shell: true, detached: true, stdio: 'ignore' });
       child.unref();
       setTimeout(() => resolve({ ok: true, output: '已尝试启动 Hexo 预览服务，请稍后打开预览链接。' }), 1500);
@@ -110,17 +171,58 @@ function readPostsWithMeta(dir, status) {
   });
 }
 function collectSuggestions(posts) {
-  const tags = new Set(); const categories = new Set();
+  const tags = new Set();
+  const categories = new Set();
   posts.forEach(p => { (p.tags || []).forEach(t => tags.add(t)); (p.categories || []).forEach(c => categories.add(c)); });
   return { tags: Array.from(tags), categories: Array.from(categories) };
 }
+function loginPage() {
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>后台解锁</title><style>body{font-family:system-ui,sans-serif;background:#f5f7fb;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0} .box{background:#fff;padding:28px;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.08);width:320px} input{width:100%;padding:10px 12px;margin:10px 0 14px;border:1px solid #d1d5db;border-radius:10px;box-sizing:border-box} button{width:100%;padding:10px 12px;border:none;border-radius:10px;background:#2563eb;color:#fff;cursor:pointer} .msg{color:#b91c1c;font-size:14px;min-height:20px}</style></head><body><div class="box"><h2>后台解锁</h2><p>请输入密码进入博客管理台。</p><input id="pwd" type="password" placeholder="输入密码"><button onclick="login()">解锁</button><div class="msg" id="msg"></div></div><script>async function login(){const res=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('pwd').value})}); if(res.ok){location.href='/';} else {const d=await res.json(); document.getElementById('msg').textContent=d.message||'密码错误';}}</script></body></html>`;
+}
+
+setInterval(() => {
+  if (Date.now() - lastHeartbeatAt > HEARTBEAT_TIMEOUT_MS) {
+    console.log('No heartbeat for 2 minutes, shutting down blog admin local.');
+    process.exit(0);
+  }
+}, 15000);
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  if (req.method === 'GET' && url.pathname === '/login') {
+    return send(res, 200, loginPage(), 'text/html; charset=utf-8');
+  }
+  if (req.method === 'POST' && url.pathname === '/login') {
+    const data = JSON.parse((await readBody(req)) || '{}');
+    if (data.password !== ADMIN_PASSWORD) return send(res, 401, { message: '密码错误' });
+    const token = crypto.randomBytes(24).toString('hex');
+    sessions.add(token);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Set-Cookie': `admin_session=${token}; Path=/; HttpOnly; SameSite=Lax` });
+    return res.end(JSON.stringify({ message: '登录成功' }));
+  }
+  if (req.method === 'POST' && url.pathname === '/logout') {
+    const cookies = parseCookies(req);
+    if (cookies.admin_session) sessions.delete(cookies.admin_session);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Set-Cookie': 'admin_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax' });
+    return res.end(JSON.stringify({ message: '已退出' }));
+  }
+
+  if (req.method === 'POST' && url.pathname === '/heartbeat') {
+    lastHeartbeatAt = Date.now();
+    return send(res, 200, { ok: true });
+  }
+
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+    if (!isAuthed(req)) {
+      res.writeHead(302, { Location: '/login' });
+      return res.end();
+    }
     return send(res, 200, fs.readFileSync(path.join(ADMIN_ROOT, 'public', 'index.html'), 'utf8'), 'text/html; charset=utf-8');
   }
+
+  if (url.pathname.startsWith('/api/') && !requireAuth(req, res)) return;
+
   if (req.method === 'GET' && url.pathname === '/api/posts') {
     const posts = [...readPostsWithMeta(POSTS_DIR, 'publish'), ...readPostsWithMeta(DRAFTS_DIR, 'draft')];
     return send(res, 200, { posts, suggestions: collectSuggestions(posts) });
