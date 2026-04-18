@@ -3,20 +3,20 @@
 ## Source: https://github.com/hexojs/hexo/
 
 # Site
-title: Leejeo的小窝
-subtitle: '一个小窝'
+title: Leeejeo的小窝
+subtitle: ''
 description: '一个博客'
 keywords:
   - 博客
   - 随笔
   - 记录
-author: Leejeo
+author: Leeejeo
 language: zh-CN
 timezone: Asia/Shanghai
 
 # URL
 ## Set your site url here. For example, if you use GitHub Page, set url as 'https://username.github.io/project'
-url: https://liaoandgithub.github.io/leejeo
+url: https://leejeoo.github.io/leejeo
 permalink: :year/:month/:day/:title/
 permalink_defaults:
 pretty_urls:

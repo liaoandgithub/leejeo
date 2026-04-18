@@ -1,6 +1,6 @@
 backend:
   name: github
-  repo: liaoandgithub/leejeo
+  repo: leejeoo/leejeo
   branch: master
   # publish_mode 可选 simple / editorial_workflow
 publish_mode: simple
@@ -8,8 +8,8 @@ publish_mode: simple
 media_folder: source/images/uploads
 public_folder: /images/uploads
 
-site_url: https://liaoandgithub.github.io/leejeo
-logo_url: https://liaoandgithub.github.io/leejeo/img/avatar.png
+site_url: https://leejeoo.github.io/leejeo
+logo_url: https://leejeoo.github.io/leejeo/img/avatar.png
 
 collections:
   - name: posts

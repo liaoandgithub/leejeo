@@ -1,7 +1,8 @@
 ---
-title: 关于
+title: 关于-About
 layout: about
 ---
+
 
 
 
@@ -15,5 +16,6 @@ layout: about
 - 偶尔认真写下来的东西
 
 如果你恰好路过，那就随便看看
+
 
 
