@@ -113,14 +113,25 @@ function readSiteConfig() {
   return {
     title: (s.match(/^title:\s*(.*)$/m) || [])[1] || '',
     subtitle: (s.match(/^subtitle:\s*'(.*)'$/m) || s.match(/^subtitle:\s*(.*)$/m) || [])[1] || '',
-    description: (s.match(/^description:\s*'(.*)'$/m) || s.match(/^description:\s*(.*)$/m) || [])[1] || ''
+    description: (s.match(/^description:\s*'(.*)'$/m) || s.match(/^description:\s*(.*)$/m) || [])[1] || '',
+    url: (s.match(/^url:\s*(.*)$/m) || [])[1] || '',
+    root: (s.match(/^root:\s*(.*)$/m) || [])[1] || ''
   };
 }
-function writeSiteConfig({ title = '', subtitle = '', description = '' }) {
+function upsertYamlLine(s, key, value, afterKey = '') {
+  const line = `${key}: ${value}`;
+  const re = new RegExp(`^${key}:\\s*.*$`, 'm');
+  if (re.test(s)) return s.replace(re, line);
+  if (afterKey) return s.replace(new RegExp(`^${afterKey}:\\s*.*$`, 'm'), m => `${m}\n${line}`);
+  return `${s.trimEnd()}\n${line}\n`;
+}
+function writeSiteConfig({ title = '', subtitle = '', description = '', url = '', root = '' }) {
   let s = fs.readFileSync(CONFIG_FILE, 'utf8');
   s = s.replace(/^title:\s*.*/m, `title: ${title}`);
   s = s.replace(/^subtitle:\s*.*/m, `subtitle: '${String(subtitle).replace(/'/g, "''")}'`);
   s = s.replace(/^description:\s*.*/m, `description: '${String(description).replace(/'/g, "''")}'`);
+  s = upsertYamlLine(s, 'url', url || 'https://leejeoo.github.io/leeejeo');
+  s = upsertYamlLine(s, 'root', root || '/leeejeo/', 'url');
   fs.writeFileSync(CONFIG_FILE, s, 'utf8');
 }
 function readFluidHomeInfo() {
