@@ -103,8 +103,6 @@ ignore:
 theme: fluid
 
 # Deployment
-## Docs: https://hexo.io/docs/one-command-deployment
-deploy:
-  type: git
-  repo: https://github.com/leejeoo/leeejeo
-  branch: master
+## Cloudflare Pages builds this source repository directly.
+## Do not run `hexo deploy` to master; push source changes and let Cloudflare build `public`.
+deploy: {}
