@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>博客本地管理台 V3</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:1200px;margin:0 auto;padding:24px;background:#f5f7fb;color:#1f2937}
+    h1,h2{margin-top:0}
+    .card{background:#fff;border-radius:14px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 20px rgba(0,0,0,.06)}
+    input,textarea,select{width:100%;padding:10px 12px;margin:8px 0 12px;border:1px solid #d1d5db;border-radius:10px;box-sizing:border-box}
+    textarea{min-height:180px;resize:vertical}
+    button{background:#2563eb;color:#fff;border:none;border-radius:10px;padding:10px 16px;cursor:pointer;margin-right:8px;margin-top:8px}
+    button.secondary{background:#475569}
+    button.danger{background:#dc2626}
+    button.success{background:#059669}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .muted{color:#64748b;font-size:14px}
+    pre{background:#0f172a;color:#e2e8f0;padding:12px;border-radius:10px;overflow:auto}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap}
+    .small{font-size:13px;color:#64748b}
+    .preview-link{display:inline-block;margin-top:10px;color:#2563eb;text-decoration:none;font-weight:600}
+    .post-card{border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:10px 0;background:#fafafa}
+    .post-meta{font-size:13px;color:#64748b;margin:6px 0}
+    .tag{display:inline-block;background:#e0e7ff;color:#3730a3;border-radius:999px;padding:2px 8px;margin:2px 6px 2px 0;font-size:12px}
+  </style>
+</head>
+<body>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div>
+      <h1>博客本地管理台 V3</h1>
+      <p class="muted">管理 E:\blog 的文章、页面、图片和站点配置。</p>
+      <a class="preview-link" href="#" onclick="openPreview(); return false;">打开本地预览博客（http://localhost:4000/leeejeo/）</a>
+    </div>
+    <div>
+      <button class="danger" onclick="logout()">退出登录</button>
+    </div>
+  </div>
+
+
+  <div class="card">
+    <h2>新建 / 编辑文章</h2>
+    <input type="hidden" id="editingFile" />
+    <div class="row">
+      <div><label>标题</label><input id="title" placeholder="文章标题" /></div>
+      <div><label>日期</label><input id="date" placeholder="2026-04-05 21:40:00" /></div>
+    </div>
+    <div class="row">
+      <div>
+        <label>标签（逗号分隔）</label>
+        <input id="tags" list="tagOptions" placeholder="日常,记录" />
+        <datalist id="tagOptions"></datalist>
+      </div>
+      <div>
+        <label>分类（逗号分隔）</label>
+        <input id="categories" list="categoryOptions" placeholder="随笔" />
+        <datalist id="categoryOptions"></datalist>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>保存位置</label>
+        <select id="postStatus">
+          <option value="publish">正式发布（_posts）</option>
+          <option value="draft">草稿（_drafts）</option>
+        </select>
+      </div>
+      <div>
+        <label>Banner 图</label>
+        <input id="bannerImg" placeholder="例如 /img/default.png 或 /images/uploads/xxx.jpg" />
+      </div>
+    </div>
+    <div class="toolbar">
+      <button type="button" class="secondary" onclick="insertMarkdown('h2')">H2</button>
+      <button type="button" class="secondary" onclick="insertMarkdown('bold')">粗体</button>
+      <button type="button" class="secondary" onclick="insertMarkdown('quote')">引用</button>
+      <button type="button" class="secondary" onclick="insertMarkdown('code')">代码块</button>
+      <button type="button" class="secondary" onclick="insertMarkdown('link')">链接</button>
+      <button type="button" class="secondary" onclick="insertMarkdown('image')">图片占位</button>
+    </div>
+    <label>正文</label>
+    <textarea id="body" placeholder="开始写正文..."></textarea>
+    <div class="toolbar">
+      <button onclick="savePost()">保存文章</button>
+      <button class="success" onclick="saveAndBuild()">保存并构建</button>
+      <button class="success" onclick="saveAndPreview()">保存并预览</button>
+      <button class="secondary" onclick="resetEditor()">清空编辑器</button>
+    </div>
+    <div id="createResult" class="muted"></div>
+  </div>
+
+  <div class="card">
+    <h2>文章列表</h2>
+    <input id="postSearch" placeholder="搜索文章标题或文件名..." oninput="filterPosts()" />
+    <button class="secondary" onclick="loadPosts()">刷新列表</button>
+    <div id="postList"></div>
+  </div>
+
+  <div class="card">
+    <h2>图片上传</h2>
+    <input type="file" id="imageFile" accept="image/*" />
+    <button onclick="uploadImage()">上传图片</button>
+    <div id="imageResult" class="muted"></div>
+    <div class="small">上传后会自动插入到正文末尾，并返回 Markdown 图片链接。</div>
+  </div>
+
+  <div class="card">
+    <h2 style="cursor:pointer;user-select:none;" onclick="toggleSection('pageManageBody')">页面管理 ▼</h2>
+    <div id="pageManageBody" style="display:none;">
+      <h3>站点基础信息</h3>
+      <div class="row">
+        <div><label>博客标题</label><input id="siteTitle" /></div>
+        <div><label>副标题</label><input id="siteSubtitle" /></div>
+      </div>
+      <label>描述</label>
+      <textarea id="siteDescription" style="min-height:100px"></textarea>
+      <div class="row">
+        <div><label>站点 URL</label><input id="siteUrl" placeholder="https://leejeoo.github.io/leeejeo" /></div>
+        <div><label>部署根路径 root</label><input id="siteRoot" placeholder="/leeejeo/" /></div>
+      </div>
+      <button onclick="loadSiteConfig()" class="secondary">读取配置</button>
+      <button onclick="saveSiteConfig()">保存配置</button>
+      <div id="siteConfigResult" class="muted"></div>
+
+      <hr>
+      <h3>首页信息</h3>
+      <div class="row">
+        <div><label>导航栏标题</label><input id="homeBlogTitle" /></div>
+        <div><label>关于页名称</label><input id="aboutName" /></div>
+      </div>
+      <label>首页副标题 / Slogan</label>
+      <textarea id="homeSlogan" style="min-height:90px"></textarea>
+      <label>关于页简介</label>
+      <textarea id="aboutIntro" style="min-height:90px"></textarea>
+      <button onclick="loadHomeInfo()" class="secondary">读取首页信息</button>
+      <button onclick="saveHomeInfo()">保存首页信息</button>
+      <div id="homeInfoResult" class="muted"></div>
+
+      <hr>
+      <h3>页面内容</h3>
+      <select id="pageSelect">
+        <option value="about">关于页</option>
+      </select>
+      <input id="aboutTitle" placeholder="页面标题" />
+      <button class="secondary" onclick="loadAbout()">读取页面</button>
+      <textarea id="aboutBody" placeholder="页面内容..."></textarea>
+      <button onclick="saveAbout()">保存页面</button>
+      <div id="aboutResult" class="muted"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>站点操作</h2>
+    <button onclick="runAction('build')">构建博客</button>
+    <button onclick="runAction('git-push')">提交并推送</button>
+    <button class="secondary" onclick="runAction('preview-start')">启动预览</button>
+    <button class="danger" onclick="runAction('preview-stop')">停止预览</button>
+    <pre id="actionOutput">等待操作...</pre>
+  </div>
+
+<script>
+let allPosts = [];
+function setText(id, text){ document.getElementById(id).textContent = text; }
+function getEl(id){ return document.getElementById(id); }
+function toggleSection(id){ const el=getEl(id); el.style.display = (el.style.display==='none') ? 'block' : 'none'; }
+
+async function loadSiteConfig(){ const res=await fetch('/api/site-config'); const data=await res.json(); getEl('siteTitle').value=data.title||''; getEl('siteSubtitle').value=data.subtitle||''; getEl('siteDescription').value=data.description||''; getEl('siteUrl').value=data.url||''; getEl('siteRoot').value=data.root||''; }
+async function saveSiteConfig(){ const res=await fetch('/api/site-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:getEl('siteTitle').value,subtitle:getEl('siteSubtitle').value,description:getEl('siteDescription').value,url:getEl('siteUrl').value,root:getEl('siteRoot').value})}); const data=await res.json(); setText('siteConfigResult', data.message||JSON.stringify(data)); }
+
+async function loadHomeInfo(){ const res=await fetch('/api/home-info'); const data=await res.json(); getEl('homeBlogTitle').value=data.blog_title||''; getEl('homeSlogan').value=data.slogan||''; getEl('aboutName').value=data.about_name||''; getEl('aboutIntro').value=data.about_intro||''; getEl('bannerImg').value=data.banner_img||''; }
+async function saveHomeInfo(){ const res=await fetch('/api/home-info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blog_title:getEl('homeBlogTitle').value,slogan:getEl('homeSlogan').value,about_name:getEl('aboutName').value,about_intro:getEl('aboutIntro').value,banner_img:getEl('bannerImg').value})}); const data=await res.json(); setText('homeInfoResult', data.message||JSON.stringify(data)); }
+
+async function loadPosts(){ const res=await fetch('/api/posts'); const data=await res.json(); allPosts = data.posts||[]; renderPosts(allPosts); refreshSuggestions(data.suggestions||{}); }
+function renderPosts(posts){ const wrap=getEl('postList'); wrap.innerHTML=''; posts.forEach(p=>{ const card=document.createElement('div'); card.className='post-card'; const tags=(p.tags||[]).map(t=>`<span class="tag">${t}</span>`).join(''); const cats=(p.categories||[]).map(c=>`<span class="tag">${c}</span>`).join(''); card.innerHTML=`<div><strong>${p.title||p.file}</strong></div><div class="post-meta">${p.file} | ${p.date||''} | ${p.status==='draft'?'草稿':'正式'}</div><div>${tags}${cats}</div><div class="small">${p.excerpt||''}</div><div class="toolbar"><button onclick="editPost('${p.file}','${p.status}')">编辑</button><button class="danger" onclick="deletePost('${p.file}','${p.status}')">删除</button></div>`; wrap.appendChild(card); }); }
+function filterPosts(){ const q=(getEl('postSearch').value||'').toLowerCase().trim(); if(!q) return renderPosts(allPosts); renderPosts(allPosts.filter(p => (p.file||'').toLowerCase().includes(q) || (p.title||'').toLowerCase().includes(q))); }
+function refreshSuggestions(sug){ getEl('tagOptions').innerHTML=(sug.tags||[]).map(x=>`<option value="${x}"></option>`).join(''); getEl('categoryOptions').innerHTML=(sug.categories||[]).map(x=>`<option value="${x}"></option>`).join(''); }
+
+async function editPost(file,status){ const res=await fetch('/api/posts/'+encodeURIComponent(file)+'?status='+status); const data=await res.json(); getEl('editingFile').value=file; getEl('title').value=data.title||''; getEl('date').value=data.date||''; getEl('tags').value=(data.tags||[]).join(','); getEl('categories').value=(data.categories||[]).join(','); getEl('body').value=data.body||''; getEl('postStatus').value=status||'publish'; setText('createResult','正在编辑：'+file); window.scrollTo({top:0,behavior:'smooth'}); }
+async function deletePost(file,status){ if(!confirm('确定删除 '+file+' 吗？')) return; const res=await fetch('/api/posts/'+encodeURIComponent(file)+'?status='+status,{method:'DELETE'}); const data=await res.json(); setText('createResult', data.message||JSON.stringify(data)); loadPosts(); }
+function resetEditor(){ ['editingFile','title','date','tags','categories','body'].forEach(id=>getEl(id).value=''); getEl('postStatus').value='publish'; setText('createResult',''); }
+async function savePost(){ const payload={file:getEl('editingFile').value,title:getEl('title').value,date:getEl('date').value,tags:getEl('tags').value,categories:getEl('categories').value,body:getEl('body').value,status:getEl('postStatus').value}; const res=await fetch('/api/posts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const data=await res.json(); setText('createResult', data.message||JSON.stringify(data)); if(res.ok) loadPosts(); }
+async function saveAndBuild(){ await savePost(); await runAction('build'); }
+async function saveAndPreview(){ await savePost(); await openPreview(); }
+
+function insertMarkdown(type){ const ta=getEl('body'); const start=ta.selectionStart||0; const end=ta.selectionEnd||0; const text=ta.value; let insert=''; if(type==='h2') insert='\n## 标题\n'; if(type==='bold') insert='**粗体**'; if(type==='quote') insert='\n> 引用\n'; if(type==='code') insert='\n```\n代码\n```\n'; if(type==='link') insert='[链接文字](https://example.com)'; if(type==='image') insert='![](图片地址)'; ta.value=text.slice(0,start)+insert+text.slice(end); ta.focus(); }
+
+async function uploadImage(){ const file=getEl('imageFile').files[0]; if(!file){ setText('imageResult','先选择图片'); return; } const fd=new FormData(); fd.append('image',file); const res=await fetch('/api/upload-image',{method:'POST',body:fd}); const data=await res.json(); if(data.markdown){ getEl('body').value += '\n'+data.markdown+'\n'; } setText('imageResult',(data.message||'') + (data.markdown ? (' '+data.markdown) : '')); }
+
+async function loadAbout(){ const res=await fetch('/api/about'); const data=await res.json(); getEl('aboutTitle').value=data.title||''; getEl('aboutBody').value=data.body||''; }
+async function saveAbout(){ const res=await fetch('/api/about',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:getEl('aboutTitle').value,body:getEl('aboutBody').value})}); const data=await res.json(); setText('aboutResult',data.message||JSON.stringify(data)); }
+
+async function runAction(action){ const res=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})}); const data=await res.json(); getEl('actionOutput').textContent=data.output||JSON.stringify(data,null,2); }
+async function openPreview(){ const res=await fetch('/api/preview',{method:'POST'}); const data=await res.json(); getEl('actionOutput').textContent=data.output||JSON.stringify(data,null,2); setTimeout(()=>window.open('http://localhost:4000/leeejeo/','_blank'),1200); }
+
+async function logout(){ await fetch('/logout',{method:'POST'}); location.href='/login'; }
+setInterval(()=>{ fetch('/heartbeat',{method:'POST'}).catch(()=>{}); }, 30000);
+window.addEventListener('beforeunload', ()=>{ navigator.sendBeacon('/heartbeat'); });
+loadPosts(); loadSiteConfig(); loadHomeInfo(); loadAbout();
+</script>
+</body>
+</html>
